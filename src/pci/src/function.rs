@@ -1,7 +1,7 @@
 // Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use constants::{
+use crate::constants::{
     PciBaseClass, PciHeaderType, PciProgrammingInterface, PciSubclass, CONFIGURATION_HEADER_SIZE,
     DEVICE_SPECIFIC_REGISTERS, EXTENDED_CONFIGURATION_REGISTERS,
 };
@@ -10,23 +10,23 @@ use constants::{
 /// These Functions may include hard drive interfaces, display controllers, etc.
 /// Each Function has its own configuration address space which size is 256 bytes (in PCI).
 /// PCIe added a new space in configuration: Extended Configuration Registers Space of 960 dwords.
-#[derive(Copy, Clone)]
 pub struct PciFunction {
     /// The PCI Configuration Header Space: Type0 or Type 1.
-    configuration_header: [u32; CONFIGURATION_HEADER_SIZE],
+    configuration_header: Vec<u32>,
 
     /// Optional registers (including Capability Structures) that are device specific.
-    device_specific_registers: [u32; DEVICE_SPECIFIC_REGISTERS],
+    device_specific_registers: Vec<u32>,
 
     /// Extended Configuration Space, not visible to the legacy PCI.
-    extended_coniguration_registers: [u32; EXTENDED_CONFIGURATION_REGISTERS],
+    extended_coniguration_registers: Vec<u32>,
 }
 
 impl PciFunction {
     pub fn empty() -> Self {
-        let configuration_header = [0u32; CONFIGURATION_HEADER_SIZE];
-        let device_specific_registers = [0u32; DEVICE_SPECIFIC_REGISTERS];
-        let extended_coniguration_registers = [0u32; EXTENDED_CONFIGURATION_REGISTERS];
+        let configuration_header: Vec<u32> = vec![0; CONFIGURATION_HEADER_SIZE as usize];
+        let device_specific_registers: Vec<u32> = vec![0; DEVICE_SPECIFIC_REGISTERS as usize];
+        let extended_coniguration_registers: Vec<u32> =
+            vec![0; EXTENDED_CONFIGURATION_REGISTERS as usize];
 
         PciFunction {
             configuration_header,
@@ -66,18 +66,45 @@ impl PciFunction {
         pci_function.write_configuration_byte(1, 0, revision_id);
 
         // Determine the layout of the header.
-        pci_function.write_configuration_byte(
-            3,
-            2,
-            match header_type {
-                PciHeaderType::Type0 => 0x00,
-                PciHeaderType::Type1 => 0x01,
-            },
-        );
+        match header_type {
+            PciHeaderType::Type0 => {
+                // Header type.
+                pci_function.write_configuration_byte(3, 2, 0x00);
 
-        // The SSID-SVID combination differentiates specific model, so identifies the card.
-        pci_function.write_configuration_word(11, 1, subsystem_id);
-        pci_function.write_configuration_word(11, 0, subsystem_vendor_id);
+                // The SSID-SVID combination differentiates specific model, so identifies the card.
+                pci_function.write_configuration_word(11, 1, subsystem_id);
+                pci_function.write_configuration_word(11, 0, subsystem_vendor_id);
+            }
+
+            PciHeaderType::Type1 => {
+                // Header type.
+                pci_function.write_configuration_byte(6, 3, 0x00);
+
+                // Secondary Latency Timer.
+                pci_function.write_configuration_byte(6, 3, 0x00);
+
+                // Subordinate Bus Number.
+                pci_function.write_configuration_byte(6, 2, 0x00);
+
+                // Secondary Bus Number.
+                pci_function.write_configuration_byte(6, 1, 0x00);
+
+                // Primary Bus Number.
+                pci_function.write_configuration_byte(6, 0, 0x00);
+
+                // Secondary Status.
+                pci_function.write_configuration_word(7, 1, 0x0000);
+
+                // Memory Limit.
+                pci_function.write_configuration_word(8, 1, 0xFFFF);
+
+                // Memory Base.
+                pci_function.write_configuration_word(8, 0, 0xFFFF);
+
+                // Bridge Control.
+                pci_function.write_configuration_word(15, 1, 0xFFFF);
+            }
+        }
 
         pci_function
     }
