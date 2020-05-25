@@ -25,6 +25,7 @@ mmds = { path = "../mmds" }
 utils = { path = "../utils"}
 rate_limiter = { path = "../rate_limiter" }
 seccomp = { path = "../seccomp" }
+pci = { path = "../pci" }
 polly = { path = "../polly" }
 snapshot = { path = "../snapshot"}
 

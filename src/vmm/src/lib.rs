@@ -29,6 +29,7 @@ extern crate kernel;
 #[macro_use]
 extern crate logger;
 extern crate dumbo;
+extern crate pci;
 extern crate rate_limiter;
 extern crate seccomp;
 extern crate snapshot;
@@ -72,6 +73,8 @@ use device_manager::legacy::PortIODeviceManager;
 use device_manager::mmio::MMIODeviceManager;
 use devices::BusDevice;
 use logger::{LoggerError, MetricsError, METRICS};
+use pci::PciBus;
+
 #[cfg(target_arch = "x86_64")]
 use memory_snapshot::SnapshotMemory;
 #[cfg(target_arch = "x86_64")]
@@ -235,6 +238,8 @@ pub struct Vmm {
     mmio_device_manager: MMIODeviceManager,
     #[cfg(target_arch = "x86_64")]
     pio_device_manager: PortIODeviceManager,
+
+    pci_bus: PciBus,
 }
 
 impl Vmm {

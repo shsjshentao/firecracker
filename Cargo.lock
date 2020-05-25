@@ -474,6 +474,14 @@ version = "11.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "pci"
+version = "0.1.0"
+dependencies = [
+ "devices 0.1.0",
+ "utils 0.1.0",
+]
+
+[[package]]
 name = "plotters"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -779,6 +787,7 @@ dependencies = [
  "libc 0.2.68 (registry+https://github.com/rust-lang/crates.io-index)",
  "logger 0.1.0",
  "mmds 0.1.0",
+ "pci 0.1.0",
  "polly 0.0.1",
  "rate_limiter 0.1.0",
  "seccomp 0.1.0",

@@ -23,6 +23,7 @@ use arch::InitrdConfig;
 use devices::legacy::Serial;
 use devices::virtio::{Block, MmioTransport, Net, VirtioDevice, Vsock, VsockUnixBackend};
 use kernel::cmdline::Cmdline as KernelCmdline;
+use pci::{PciBus, PciRootComplex};
 use polly::event_manager::{Error as EventManagerError, EventManager, Subscriber};
 use seccomp::{BpfProgramRef, SeccompFilter};
 #[cfg(target_arch = "x86_64")]
@@ -248,6 +249,8 @@ fn create_vmm_and_vcpus(
             .map_err(Internal)?
     };
 
+    let pci_bus = PciBus::new(PciRootComplex::new());
+
     // On aarch64, the vCPUs need to be created (i.e call KVM_CREATE_VCPU) before setting up the
     // IRQ chip because the `KVM_CREATE_VCPU` ioctl will return error if the IRQCHIP
     // was already initialized.
@@ -267,6 +270,7 @@ fn create_vmm_and_vcpus(
         mmio_device_manager,
         #[cfg(target_arch = "x86_64")]
         pio_device_manager,
+        pci_bus,
     };
 
     Ok((vmm, vcpus))
@@ -821,6 +825,10 @@ pub mod tests {
         .unwrap()
     }
 
+    fn default_pci_bus() -> PciBus {
+        PciBus::new(PciRootComplex::new())
+    }
+
     pub(crate) fn default_kernel_cmdline() -> Cmdline {
         let mut kernel_cmdline = kernel::cmdline::Cmdline::new(4096);
         kernel_cmdline.insert_str(DEFAULT_KERNEL_CMDLINE).unwrap();
@@ -839,6 +847,7 @@ pub mod tests {
         let mmio_device_manager = default_mmio_device_manager();
         #[cfg(target_arch = "x86_64")]
         let pio_device_manager = default_portio_device_manager();
+        let pci_bus = default_pci_bus();
 
         let mut vmm = Vmm {
             events_observer: Some(Box::new(SerialStdin::get())),
@@ -849,6 +858,7 @@ pub mod tests {
             mmio_device_manager,
             #[cfg(target_arch = "x86_64")]
             pio_device_manager,
+            pci_bus,
         };
 
         #[cfg(target_arch = "x86_64")]
