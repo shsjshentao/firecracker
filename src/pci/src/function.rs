@@ -10,6 +10,7 @@ use crate::constants::{
 /// These Functions may include hard drive interfaces, display controllers, etc.
 /// Each Function has its own configuration address space which size is 256 bytes (in PCI).
 /// PCIe added a new space in configuration: Extended Configuration Registers Space of 960 dwords.
+#[derive(Clone)]
 pub struct PciFunction {
     /// The PCI Configuration Header Space: Type0 or Type 1.
     configuration_header: Vec<u32>,
@@ -110,7 +111,7 @@ impl PciFunction {
     }
 
     /// Read a byte from `offset` of the `index`-th register. Offset is in range 0-3 (byte align).
-    fn read_configuration_byte(&self, index: usize, offset: usize) -> Option<u8> {
+    pub fn read_configuration_byte(&self, index: usize, offset: usize) -> Option<u8> {
         if offset >= 4 {
             eprintln!("The offset is out of bounds: {}", offset);
             return None;
@@ -132,7 +133,7 @@ impl PciFunction {
     }
 
     /// Write byte at `offset` inside of `index`-th register. Offset is in range 0-3  (byte align).
-    fn write_configuration_byte(&mut self, index: usize, offset: usize, value: u8) {
+    pub fn write_configuration_byte(&mut self, index: usize, offset: usize, value: u8) {
         if offset >= 4 {
             eprintln!("The offset is out of bounds: {}", offset);
             return;
@@ -154,7 +155,7 @@ impl PciFunction {
     }
 
     /// Read a word from `offset` of the `index`-th register. Offset is in range 0-1 (word align).
-    fn read_configuration_word(&self, index: usize, offset: usize) -> Option<u16> {
+    pub fn read_configuration_word(&self, index: usize, offset: usize) -> Option<u16> {
         if offset >= 2 {
             eprintln!("The offset is out of bounds: {}", offset);
             return None;
@@ -177,7 +178,7 @@ impl PciFunction {
     }
 
     /// Write word at `offset` inside of `index`-th register. Offset is in range 0-1  (word align).
-    fn write_configuration_word(&mut self, index: usize, offset: usize, value: u16) {
+    pub fn write_configuration_word(&mut self, index: usize, offset: usize, value: u16) {
         if offset >= 2 {
             eprintln!("The offset is out of bounds: {}", offset);
             return;
@@ -199,7 +200,7 @@ impl PciFunction {
     }
 
     /// Read a word from `offset` of the `index`-th register.
-    fn read_configuration_dword(&self, index: usize) -> Option<u32> {
+    pub fn read_configuration_dword(&self, index: usize) -> Option<u32> {
         match self.configuration_header.get(index) {
             Some(value) => Some(*value),
             None => {
@@ -210,7 +211,7 @@ impl PciFunction {
     }
 
     /// Write a dword inside of the `index`-th register.
-    fn write_configuration_dword(&mut self, index: usize, value: u32) {
+    pub fn write_configuration_dword(&mut self, index: usize, value: u32) {
         match self.configuration_header.get_mut(index) {
             Some(element) => *element = value,
             None => {
