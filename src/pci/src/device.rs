@@ -3,16 +3,32 @@
 
 use crate::constants::MAX_FUNCTION_NUMBER;
 use crate::PciFunction;
-use devices::BusDevice;
 use std::option::Option;
 
 /// Each Device must implement Function 0 and may contain a collection up to 8 Functions.
 /// A Device might implement Functions 0, 2 and 7 and there is no need to be sequentially.
-pub trait PciDevice: BusDevice {
-    /// Return a mutable reference to a function of the current PciDevice.
-    /// If the index is out of bounds return None.
-    fn get_function(&self, function_index: usize) -> Option<&PciFunction>;
-    fn get_mut_function(&mut self, function_index: usize) -> Option<&mut PciFunction>;
+#[derive(Clone)]
+pub struct PciDevice {
+    functions: Vec<PciFunction>,
+}
+
+impl PciDevice {
+    /// Create a PCI device with MAX_FUNCTION_NUMBER empty functions.
+    pub fn empty() -> Self {
+        PciDevice {
+            functions: vec![PciFunction::empty(); MAX_FUNCTION_NUMBER],
+        }
+    }
+
+    /// Return a reference to a function of the PciDevice if it exists at the given index.
+    fn get_function(&self, function_index: usize) -> Option<&PciFunction> {
+        self.functions.get(function_index)
+    }
+
+    /// Return a mutable reference to a function of the PciDevice if it exists at the given index.
+    fn get_mut_function(&mut self, function_index: usize) -> Option<&mut PciFunction> {
+        self.functions.get_mut(function_index)
+    }
 
     /// Get a register from the configuration header space of a function of the device.
     /// * `function_index` - The index of the function of the device.
@@ -53,47 +69,39 @@ pub trait PciDevice: BusDevice {
     }
 }
 
-/// Emulate the PCI Root Complex node of the PCIe topology.
-/// This component generates transaction requests on behalf of the processor.
-/// This hardware component may contain different interfaces (CPU, DRAM) and chips.
-pub struct PciRootComplex {
-    functions: Vec<PciFunction>,
-}
-
-impl PciRootComplex {
-    pub fn new() -> Self {
-        let functions: Vec<PciFunction> = vec![PciFunction::empty(); MAX_FUNCTION_NUMBER];
-
-        PciRootComplex { functions }
-    }
-}
-
-impl BusDevice for PciRootComplex {}
-
-impl PciDevice for PciRootComplex {
-    fn get_function(&self, function_index: usize) -> Option<&PciFunction> {
-        self.functions.get(function_index)
-    }
-
-    fn get_mut_function(&mut self, function_index: usize) -> Option<&mut PciFunction> {
-        self.functions.get_mut(function_index)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     extern crate utils;
 
+    /// Test writing an u32 as a Little Endian byte array and reading and assembling it.
     #[test]
-    /// Test writing a u32 as a Little Endian byte array and reading and assembling it.
-    fn register_read_write() {
+    fn device_configuration_read_write() {
         let value = utils::rand::xor_rng_u32();
-        let mut pci_root_complex = PciRootComplex::new();
+        let mut device = PciDevice::empty();
 
-        pci_root_complex.write_configuration_register(0, 1, 0, &value.to_le_bytes());
+        device.write_configuration_register(0, 1, 0, &value.to_le_bytes());
+        assert_eq!(device.read_configuration_register(0, 1), Some(value));
+    }
+
+    #[test]
+    fn device_get_function() {
+        let device = PciDevice::empty();
+
+        assert_eq!(device.functions.len(), MAX_FUNCTION_NUMBER);
+        assert!(device.get_function(0).is_some());
+        assert!(device.get_function(MAX_FUNCTION_NUMBER).is_none());
+    }
+
+    /// Test writing an u32 as a Little Endian byte array and reading it from function object.
+    #[test]
+    fn function_configuration_read_write() {
+        let value = utils::rand::xor_rng_u32();
+        let mut device = PciDevice::empty();
+
+        device.write_configuration_register(0, 1, 0, &value.to_le_bytes());
         assert_eq!(
-            pci_root_complex.read_configuration_register(0, 1),
+            device.get_function(0).unwrap().read_configuration_dword(1),
             Some(value)
         );
     }

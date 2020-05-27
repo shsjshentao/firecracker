@@ -7,7 +7,9 @@ mod bus;
 mod constants;
 mod device;
 mod function;
+mod pci;
 
 pub use self::bus::PciBus;
-pub use self::device::{PciDevice, PciRootComplex};
+pub use self::device::PciDevice;
 pub use self::function::PciFunction;
+pub use self::pci::PciRootComplex;

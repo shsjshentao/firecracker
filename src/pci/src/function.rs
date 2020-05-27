@@ -1,10 +1,16 @@
 // Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::constants::{
-    PciBaseClass, PciHeaderType, PciProgrammingInterface, PciSubclass, CONFIGURATION_HEADER_SIZE,
-    DEVICE_SPECIFIC_REGISTERS, EXTENDED_CONFIGURATION_REGISTERS,
-};
+use crate::constants::{PciBaseClass, PciHeaderType, PciProgrammingInterface, PciSubclass};
+
+/// The PCI Configuration Header Space has a length of 64 bytes, so 16 dwords.
+pub const CONFIGURATION_HEADER_SIZE: usize = 16;
+
+/// The PCI optional registers (device specific) has a length of 192 bytes, so 48 dwords.
+pub const DEVICE_SPECIFIC_REGISTERS: usize = 48;
+
+/// The PCIe Extended Configuration Registers Space has a length 3840 bytes, so 960 dwords.
+pub const EXTENDED_CONFIGURATION_REGISTERS: usize = 960;
 
 /// Functions are designed into every Device.
 /// These Functions may include hard drive interfaces, display controllers, etc.
@@ -23,6 +29,7 @@ pub struct PciFunction {
 }
 
 impl PciFunction {
+    /// Create a PCI function having the configuration space full of zeroes.
     pub fn empty() -> Self {
         let configuration_header: Vec<u32> = vec![0; CONFIGURATION_HEADER_SIZE as usize];
         let device_specific_registers: Vec<u32> = vec![0; DEVICE_SPECIFIC_REGISTERS as usize];
@@ -226,36 +233,48 @@ mod tests {
     use super::*;
     extern crate utils;
 
+    /// Test combination between read/write methods, composing a dword from 4 bytes.
     #[test]
-    fn configuration_read_write() {
+    fn function_configuration_read_write() {
+        let value = utils::rand::xor_rng_u32();
         let mut pci_function = PciFunction::empty();
 
-        // Test read_configuration_byte and write_configuration_byte.
+        for index in 0..4 {
+            pci_function.write_configuration_byte(0, index, value.to_le_bytes()[index]);
+        }
+        assert_eq!(pci_function.read_configuration_dword(0), Some(value));
+    }
+
+    #[test]
+    fn function_configuration_read_write_byte() {
+        let mut pci_function = PciFunction::empty();
+
         for index in 0..4 {
             let value = utils::rand::xor_rng_u32() as u8;
             pci_function.write_configuration_byte(0, index, value);
             assert_eq!(pci_function.read_configuration_byte(0, index), Some(value));
         }
         assert_eq!(pci_function.read_configuration_byte(0, 4), None);
+    }
+
+    #[test]
+    fn function_configuration_read_write_word() {
+        let mut pci_function = PciFunction::empty();
 
         for index in 0..2 {
-            // Test read_configuration_word and write_configuration_word.
             let value = utils::rand::xor_rng_u32() as u16;
             pci_function.write_configuration_word(1, index, value);
             assert_eq!(pci_function.read_configuration_word(1, index), Some(value));
         }
         assert_eq!(pci_function.read_configuration_word(1, 2), None);
+    }
 
-        // Test read_configuration_dword and write_configuration_dword.
+    #[test]
+    fn function_configuration_read_write_dword() {
         let value = utils::rand::xor_rng_u32();
+        let mut pci_function = PciFunction::empty();
+
         pci_function.write_configuration_dword(2, value);
         assert_eq!(pci_function.read_configuration_dword(2), Some(value));
-
-        // Test combination between them. Compose a dword from 4 bytes.
-        let mut v: u32 = 0;
-        for index in 0..4 {
-            v += u32::from(pci_function.read_configuration_byte(0, index).unwrap()) << (index * 8);
-        }
-        assert_eq!(pci_function.read_configuration_dword(0), Some(v));
     }
 }
