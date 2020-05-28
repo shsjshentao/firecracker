@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 extern crate devices;
+extern crate polly;
+extern crate utils;
 
 mod bus;
 mod constants;
@@ -12,4 +14,4 @@ mod pci;
 pub use self::bus::PciBus;
 pub use self::device::PciDevice;
 pub use self::function::PciFunction;
-pub use self::pci::PciRootComplex;
+pub use self::pci::{PciRootComplex, PCI_IO_ADDRESS_PORT, PCI_IO_DATA_PORT, PCI_IO_PORT_SIZE};

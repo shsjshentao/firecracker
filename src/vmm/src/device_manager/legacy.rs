@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 
 use devices;
 use kvm_ioctls::VmFd;
+use pci::{PciRootComplex, PCI_IO_ADDRESS_PORT, PCI_IO_PORT_SIZE};
 use utils::eventfd::EventFd;
 
 /// Errors corresponding to the `PortIODeviceManager`.
@@ -41,6 +42,7 @@ type Result<T> = ::std::result::Result<T, Error>;
 pub struct PortIODeviceManager {
     pub io_bus: devices::Bus,
     pub stdio_serial: Arc<Mutex<devices::legacy::Serial>>,
+    pub pci_root_complex: Arc<Mutex<pci::PciRootComplex>>,
     pub i8042: Arc<Mutex<devices::legacy::I8042Device>>,
 
     pub com_evt_1_3: EventFd,
@@ -52,6 +54,7 @@ impl PortIODeviceManager {
     /// Create a new DeviceManager handling legacy devices (uart, i8042).
     pub fn new(
         serial: Arc<Mutex<devices::legacy::Serial>>,
+        pci_root_complex: Arc<Mutex<PciRootComplex>>,
         i8042_reset_evfd: EventFd,
     ) -> Result<Self> {
         let io_bus = devices::Bus::new();
@@ -72,6 +75,7 @@ impl PortIODeviceManager {
         Ok(PortIODeviceManager {
             io_bus,
             stdio_serial: serial,
+            pci_root_complex,
             i8042,
             com_evt_1_3,
             com_evt_2_4,
@@ -84,6 +88,7 @@ impl PortIODeviceManager {
         self.io_bus
             .insert(self.stdio_serial.clone(), 0x3f8, 0x8)
             .map_err(Error::BusError)?;
+
         self.io_bus
             .insert(
                 Arc::new(Mutex::new(devices::legacy::Serial::new_sink(
@@ -93,6 +98,7 @@ impl PortIODeviceManager {
                 0x8,
             )
             .map_err(Error::BusError)?;
+
         self.io_bus
             .insert(
                 Arc::new(Mutex::new(devices::legacy::Serial::new_sink(
@@ -102,6 +108,7 @@ impl PortIODeviceManager {
                 0x8,
             )
             .map_err(Error::BusError)?;
+
         self.io_bus
             .insert(
                 Arc::new(Mutex::new(devices::legacy::Serial::new_sink(
@@ -111,6 +118,16 @@ impl PortIODeviceManager {
                 0x8,
             )
             .map_err(Error::BusError)?;
+
+        // Add the PCI device that will manage the space between 0xCF8 - 0xCFC.
+        self.io_bus
+            .insert(
+                self.pci_root_complex.clone(),
+                PCI_IO_ADDRESS_PORT as u64,
+                2 * PCI_IO_PORT_SIZE as u64,
+            )
+            .map_err(Error::BusError)?;
+
         self.io_bus
             .insert(self.i8042.clone(), 0x060, 0x5)
             .map_err(Error::BusError)?;
@@ -140,8 +157,10 @@ mod tests {
         let mut vm = crate::builder::setup_kvm_vm(&guest_mem, false).unwrap();
         crate::builder::setup_interrupt_controller(&mut vm).unwrap();
         let serial = devices::legacy::Serial::new_sink(EventFd::new(libc::EFD_NONBLOCK).unwrap());
+        let pci_root_complex = PciRootComplex::new();
         let mut ldm = PortIODeviceManager::new(
             Arc::new(Mutex::new(serial)),
+            Arc::new(Mutex::new(pci_root_complex)),
             EventFd::new(libc::EFD_NONBLOCK).unwrap(),
         )
         .unwrap();

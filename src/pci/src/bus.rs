@@ -33,27 +33,27 @@ impl PciBus {
     }
 
     /// Return the bus number.
-    fn get_number(&self) -> u32 {
+    pub fn get_number(&self) -> u32 {
         self.number
     }
 
     /// Return a reference to the array of buses.
-    fn get_buses(&self) -> &Vec<PciBus> {
+    pub fn get_buses(&self) -> &Vec<PciBus> {
         &self.buses
     }
 
     /// Return a mutable reference to the array of buses.
-    fn get_mut_buses(&mut self) -> &mut Vec<PciBus> {
+    pub fn get_mut_buses(&mut self) -> &mut Vec<PciBus> {
         &mut self.buses
     }
 
     /// Return a reference to the array of devices.
-    fn get_devices(&self) -> &Vec<PciDevice> {
+    pub fn get_devices(&self) -> &Vec<PciDevice> {
         &self.devices
     }
 
     /// Return a mutable reference to the array of devices.
-    fn get_mut_devices(&mut self) -> &mut Vec<PciDevice> {
+    pub fn get_mut_devices(&mut self) -> &mut Vec<PciDevice> {
         &mut self.devices
     }
 

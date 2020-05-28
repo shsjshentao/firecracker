@@ -73,7 +73,6 @@ use device_manager::legacy::PortIODeviceManager;
 use device_manager::mmio::MMIODeviceManager;
 use devices::BusDevice;
 use logger::{LoggerError, MetricsError, METRICS};
-use pci::PciBus;
 
 #[cfg(target_arch = "x86_64")]
 use memory_snapshot::SnapshotMemory;
@@ -238,8 +237,6 @@ pub struct Vmm {
     mmio_device_manager: MMIODeviceManager,
     #[cfg(target_arch = "x86_64")]
     pio_device_manager: PortIODeviceManager,
-
-    pci_bus: PciBus,
 }
 
 impl Vmm {

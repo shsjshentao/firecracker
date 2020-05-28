@@ -5,4 +5,5 @@ authors = ["Andrei Răduță <andrei.raduta11@gmail.com>"]
 
 [dependencies]
 devices = { path = "../devices" }
+polly = { path = "../polly" }
 utils = { path = "../utils" }
