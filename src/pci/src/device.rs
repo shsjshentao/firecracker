@@ -3,56 +3,112 @@
 
 use crate::constants::MAX_FUNCTION_NUMBER;
 use crate::PciFunction;
+use std::collections::HashMap;
 use std::option::Option;
+use std::sync::{Arc, Mutex};
+
+/// Errors for the Pci Bus.
+#[derive(Debug)]
+pub enum PciDeviceError {
+    /// Invalid PCI function number provided.
+    InvalidPciFunctionNumber(usize),
+    /// Valid PCI function number but already used.
+    AlreadyInUsePciFunctionSlot(usize),
+}
+
+pub type Result<T> = std::result::Result<T, PciDeviceError>;
 
 /// Each Device must implement Function 0 and may contain a collection up to 8 Functions.
 /// A Device might implement Functions 0, 2 and 7 and there is no need to be sequentially.
-#[derive(Clone)]
 pub struct PciDevice {
-    functions: Vec<PciFunction>,
+    /// The number of the device within the bus.
+    number: usize,
+
+    /// The functions registered within this device.
+    functions: HashMap<usize, Arc<Mutex<PciFunction>>>,
 }
 
 impl PciDevice {
-    /// Create a PCI device with MAX_FUNCTION_NUMBER empty functions.
-    pub fn empty() -> Self {
+    /// Create an empty PCI device.
+    pub fn new(number: usize) -> PciDevice {
         PciDevice {
-            functions: vec![PciFunction::empty(); MAX_FUNCTION_NUMBER],
+            number,
+            functions: HashMap::new(),
         }
     }
 
-    /// Return a reference to a function of the PciDevice if it exists at the given index.
-    fn get_function(&self, function_index: usize) -> Option<&PciFunction> {
-        self.functions.get(function_index)
+    /// Create a dummy PCI device which contains a dummy function on the 0 slot.
+    /// - `number` - the number of the device.
+    pub fn new_dummy(number: usize) -> PciDevice {
+        let mut device = PciDevice::new(number);
+
+        device.add_function(PciFunction::new_dummy(0)).unwrap();
+
+        device
     }
 
-    /// Return a mutable reference to a function of the PciDevice if it exists at the given index.
-    fn get_mut_function(&mut self, function_index: usize) -> Option<&mut PciFunction> {
-        self.functions.get_mut(function_index)
+    /// Return the number of this device.
+    pub fn get_number(&self) -> usize {
+        self.number
+    }
+
+    /// Add a new function to this device.
+    /// * `function` - The function that will be wrapped in an Arc-Mutex struct and added.
+    pub fn add_function(&mut self, function: PciFunction) -> Result<()> {
+        let function_number = function.get_number();
+
+        if function_number >= MAX_FUNCTION_NUMBER {
+            return Err(PciDeviceError::InvalidPciFunctionNumber(function_number));
+        }
+
+        if self.functions.contains_key(&function_number) {
+            return Err(PciDeviceError::AlreadyInUsePciFunctionSlot(function_number));
+        }
+
+        self.functions
+            .insert(function_number, Arc::new(Mutex::new(function)));
+
+        Ok(())
+    }
+
+    /// Return a reference to the requested function if it exists.
+    /// * `function` - The index of the function of the device.
+    pub fn get_function(&self, function: usize) -> Option<&Arc<Mutex<PciFunction>>> {
+        self.functions.get(&function)
+    }
+
+    /// Return a mutable reference to the requested function if it exists.
+    /// * `function` - The index of the function of the device.
+    pub fn get_mut_function(&mut self, function: usize) -> Option<&mut Arc<Mutex<PciFunction>>> {
+        self.functions.get_mut(&function)
+    }
+
+    /// Remove the function from this device, returning the function object, if it exists.
+    /// * `function` - The index of the function of the device.
+    pub fn remove_function(&mut self, function: usize) -> Option<Arc<Mutex<PciFunction>>> {
+        self.functions.remove(&function)
     }
 
     /// Get a register from the configuration header space of a function of the device.
-    /// * `function_index` - The index of the function of the device.
-    /// * `register_index` - The index of the register within configuration header space.
-    fn read_configuration_register(
-        &self,
-        function_index: usize,
-        register_index: usize,
-    ) -> Option<u32> {
-        match self.get_function(function_index) {
-            Some(function) => function.read_configuration_dword(register_index),
-            None => None,
+    /// * `function` - The index of the function of the device.
+    /// * `register` - The index of the register within configuration header space.
+    pub fn read_configuration_register(&self, function: usize, register: usize) -> Option<u32> {
+        if let Some(function) = self.get_function(function) {
+            function.lock().unwrap().read_configuration_dword(register)
+        } else {
+            None
         }
     }
 
     /// Set a register in the configuration header space of a function of the device.
-    /// * `function_index` - The index of the function of the device.
-    /// * `register_index` - The index of the register within configuration header space.
+    /// * `function` - The index of the function of the device.
+    /// * `register` - The index of the register within configuration header space.
     /// * `offset` - The offset within the register.
     /// * `data` - The actual bytes of data.
-    fn write_configuration_register(
+    pub fn write_configuration_register(
         &mut self,
-        function_index: usize,
-        register_index: usize,
+        function: usize,
+        register: usize,
         offset: usize,
         data: &[u8],
     ) {
@@ -61,9 +117,11 @@ impl PciDevice {
             return;
         }
 
-        if let Some(function) = self.get_mut_function(function_index) {
+        if let Some(function) = self.get_mut_function(function) {
+            let mut function = function.lock().unwrap();
+
             for index in 0..data.len() {
-                function.write_configuration_byte(register_index, offset + index, data[index])
+                function.write_configuration_byte(register, offset + index, data[index])
             }
         }
     }
@@ -72,37 +130,53 @@ impl PciDevice {
 #[cfg(test)]
 mod tests {
     use super::*;
-    extern crate utils;
+    use utils::byte_order::read_le_u32;
+    use utils::rand::xor_rng_u32;
 
-    /// Test writing an u32 as a Little Endian byte array and reading and assembling it.
     #[test]
-    fn device_configuration_read_write() {
-        let value = utils::rand::xor_rng_u32();
-        let mut device = PciDevice::empty();
+    fn device_function_add_get_remove() {
+        let mut device = PciDevice::new(0);
 
-        device.write_configuration_register(0, 1, 0, &value.to_le_bytes());
-        assert_eq!(device.read_configuration_register(0, 1), Some(value));
+        for function in 0..MAX_FUNCTION_NUMBER {
+            assert!(device
+                .add_function(PciFunction::new_dummy(function))
+                .is_ok());
+            assert!(device.get_function(function).is_some());
+        }
+
+        assert!(device
+            .add_function(PciFunction::new_dummy(MAX_FUNCTION_NUMBER))
+            .is_err());
+
+        for function in 0..MAX_FUNCTION_NUMBER {
+            device.remove_function(function);
+            assert!(device.get_function(function).is_none());
+        }
     }
 
     #[test]
-    fn device_get_function() {
-        let device = PciDevice::empty();
+    fn device_configuration_normal_read() {
+        let data = [xor_rng_u32() as u8; 4];
+        let mut device = PciDevice::new_dummy(0);
 
-        assert_eq!(device.functions.len(), MAX_FUNCTION_NUMBER);
-        assert!(device.get_function(0).is_some());
-        assert!(device.get_function(MAX_FUNCTION_NUMBER).is_none());
-    }
-
-    /// Test writing an u32 as a Little Endian byte array and reading it from function object.
-    #[test]
-    fn function_configuration_read_write() {
-        let value = utils::rand::xor_rng_u32();
-        let mut device = PciDevice::empty();
-
-        device.write_configuration_register(0, 1, 0, &value.to_le_bytes());
+        device.write_configuration_register(0, 1, 0, &data);
         assert_eq!(
-            device.get_function(0).unwrap().read_configuration_dword(1),
-            Some(value)
+            device.read_configuration_register(0, 1),
+            Some(read_le_u32(&data))
+        );
+    }
+
+    #[test]
+    fn device_configuration_function_read() {
+        let data = [xor_rng_u32() as u8; 4];
+        let mut device = PciDevice::new_dummy(0);
+
+        device.write_configuration_register(0, 1, 0, &data);
+
+        let function = device.get_function(0).unwrap();
+        assert_eq!(
+            function.lock().unwrap().read_configuration_dword(1),
+            Some(read_le_u32(&data))
         );
     }
 }
