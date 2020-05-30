@@ -14,4 +14,4 @@ mod pci;
 pub use self::bus::PciBus;
 pub use self::device::PciDevice;
 pub use self::function::PciFunction;
-pub use self::pci::{PciRootComplex, PCI_IO_ADDRESS_PORT, PCI_IO_DATA_PORT, PCI_IO_PORT_SIZE};
+pub use self::pci::{PciRootComplex, PCI_IO_PORT, PCI_IO_PORT_SIZE};

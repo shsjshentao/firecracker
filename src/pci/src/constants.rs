@@ -11,8 +11,8 @@ pub const MAX_DEVICE_NUMBER: usize = 32;
 pub const MAX_FUNCTION_NUMBER: usize = 8;
 
 // https://devicehunt.com/view/type/pci/vendor/1D94/device/1452
-pub const PCIE_DUMMY_VENDOR_ID: u16 = 0x1D94;
-pub const PCIE_DUMMY_DEVICE_ID: u16 = 0x1452;
+pub const VENDOR_ID_INTEL: u16 = 0x8086;
+pub const DEVICE_ID_INTEL_VIRT_PCIE_HOST: u16 = 0x0D57;
 
 /// Type 0 is required for every Function, except for the Bridge Functions.
 /// Type 1 is required for the Bridge (Switch) Functions.

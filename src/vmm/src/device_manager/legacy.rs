@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 
 use devices;
 use kvm_ioctls::VmFd;
-use pci::{PciRootComplex, PCI_IO_ADDRESS_PORT, PCI_IO_PORT_SIZE};
+use pci::{PciRootComplex, PCI_IO_PORT, PCI_IO_PORT_SIZE};
 use utils::eventfd::EventFd;
 
 /// Errors corresponding to the `PortIODeviceManager`.
@@ -123,8 +123,8 @@ impl PortIODeviceManager {
         self.io_bus
             .insert(
                 self.pci_root_complex.clone(),
-                PCI_IO_ADDRESS_PORT as u64,
-                2 * PCI_IO_PORT_SIZE as u64,
+                PCI_IO_PORT as u64,
+                PCI_IO_PORT_SIZE as u64,
             )
             .map_err(Error::BusError)?;
 

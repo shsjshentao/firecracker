@@ -3,7 +3,7 @@
 
 use crate::constants::{
     PciBaseClass, PciBridgeSubclass, PciHeaderType, PciProgrammingInterface, PciSubclass,
-    PCIE_DUMMY_DEVICE_ID, PCIE_DUMMY_VENDOR_ID,
+    DEVICE_ID_INTEL_VIRT_PCIE_HOST, VENDOR_ID_INTEL,
 };
 
 /// The PCI Configuration Header Space has a length of 64 bytes, so 16 dwords.
@@ -89,7 +89,7 @@ impl PciFunction {
 
             PciHeaderType::Type1 => {
                 // Header type.
-                function.write_configuration_byte(6, 3, 0x00);
+                function.write_configuration_byte(3, 2, 0x01);
 
                 // Secondary Latency Timer.
                 function.write_configuration_byte(6, 3, 0x00);
@@ -125,8 +125,8 @@ impl PciFunction {
     pub fn new_dummy(number: usize) -> PciFunction {
         PciFunction::new(
             number,
-            PCIE_DUMMY_DEVICE_ID,
-            PCIE_DUMMY_VENDOR_ID,
+            DEVICE_ID_INTEL_VIRT_PCIE_HOST,
+            VENDOR_ID_INTEL,
             PciBaseClass::BridgeDevice,
             &PciBridgeSubclass::HostBridge,
             None,
