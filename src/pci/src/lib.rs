@@ -6,7 +6,6 @@ extern crate polly;
 extern crate utils;
 
 mod bus;
-mod constants;
 mod device;
 mod function;
 mod pci;

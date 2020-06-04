@@ -1,11 +1,16 @@
 // Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::constants::{MAX_BUS_NUMBER, MAX_DEVICE_NUMBER};
 use crate::device::PciDevice;
 use std::collections::HashMap;
 use std::option::Option;
 use std::sync::{Arc, Mutex};
+
+/// There are up to 256 Bus numbers that can be assigned.
+pub const MAX_BUS_NUMBER: usize = 256;
+
+/// There are up to 32 Device attachments on a single PCI Bus.
+pub const MAX_DEVICE_NUMBER: usize = 32;
 
 /// Errors for the PciBus.
 #[derive(Debug)]
@@ -42,16 +47,6 @@ impl PciBus {
             buses: HashMap::new(),
             devices: HashMap::new(),
         }
-    }
-
-    /// Create a dummy PCI bus which contains a dummy PCI device on the 0 slot.
-    /// - `number` - the number of the bus.
-    pub fn new_dummy(number: usize) -> PciBus {
-        let mut bus = PciBus::new(number);
-
-        bus.add_device(PciDevice::new_dummy(0)).unwrap();
-
-        bus
     }
 
     /// Return the number of this device.
@@ -211,11 +206,11 @@ mod tests {
         let mut main_bus = PciBus::new(0);
 
         for bus in 0..MAX_BUS_NUMBER {
-            assert!(main_bus.add_bus(PciBus::new_dummy(bus)).is_ok());
+            assert!(main_bus.add_bus(PciBus::new(bus)).is_ok());
             assert!(main_bus.get_bus(bus).is_some());
         }
 
-        assert!(main_bus.add_bus(PciBus::new_dummy(MAX_BUS_NUMBER)).is_err());
+        assert!(main_bus.add_bus(PciBus::new(MAX_BUS_NUMBER)).is_err());
 
         for bus in 0..MAX_BUS_NUMBER {
             main_bus.remove_bus(bus);
@@ -228,13 +223,11 @@ mod tests {
         let mut bus = PciBus::new(0);
 
         for device in 0..MAX_DEVICE_NUMBER {
-            assert!(bus.add_device(PciDevice::new_dummy(device)).is_ok());
+            assert!(bus.add_device(PciDevice::new(device)).is_ok());
             assert!(bus.get_device(device).is_some());
         }
 
-        assert!(bus
-            .add_device(PciDevice::new_dummy(MAX_DEVICE_NUMBER))
-            .is_err());
+        assert!(bus.add_device(PciDevice::new(MAX_DEVICE_NUMBER)).is_err());
 
         for device in 0..MAX_DEVICE_NUMBER {
             bus.remove_device(device);

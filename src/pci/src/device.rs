@@ -1,11 +1,14 @@
 // Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::constants::MAX_FUNCTION_NUMBER;
 use crate::PciFunction;
 use std::collections::HashMap;
 use std::option::Option;
 use std::sync::{Arc, Mutex};
+use utils::byte_order::{read_le_u16, read_le_u32};
+
+/// A Device can have implemented up to 8 Functions (not necessarily sequentially).
+pub const MAX_FUNCTION_NUMBER: usize = 8;
 
 /// Errors for the Pci Bus.
 #[derive(Debug)]
@@ -37,12 +40,14 @@ impl PciDevice {
         }
     }
 
-    /// Create a dummy PCI device which contains a dummy function on the 0 slot.
+    /// Create a dummy PCI device which contains a dummy host bridge as function 0.
     /// - `number` - the number of the device.
-    pub fn new_dummy(number: usize) -> PciDevice {
+    pub fn new_dummy_host_bridge(number: usize) -> PciDevice {
         let mut device = PciDevice::new(number);
 
-        device.add_function(PciFunction::new_dummy(0)).unwrap();
+        device
+            .add_function(PciFunction::new_dummy_host_bridge(0))
+            .unwrap();
 
         device
     }
@@ -120,8 +125,11 @@ impl PciDevice {
         if let Some(function) = self.get_mut_function(function) {
             let mut function = function.lock().unwrap();
 
-            for index in 0..data.len() {
-                function.write_configuration_byte(register, offset + index, data[index])
+            match data.len() {
+                1 => function.write_configuration_byte(register, offset, data[0]),
+                2 => function.write_configuration_word(register, offset, read_le_u16(data)),
+                4 => function.write_configuration_dword(register, read_le_u32(data)),
+                _ => (),
             }
         }
     }
@@ -133,19 +141,21 @@ mod tests {
     use utils::byte_order::read_le_u32;
     use utils::rand::xor_rng_u32;
 
+    fn get_function(function: usize) -> PciFunction {
+        PciFunction::new_dummy_host_bridge(function)
+    }
+
     #[test]
     fn device_function_add_get_remove() {
         let mut device = PciDevice::new(0);
 
         for function in 0..MAX_FUNCTION_NUMBER {
-            assert!(device
-                .add_function(PciFunction::new_dummy(function))
-                .is_ok());
+            assert!(device.add_function(get_function(function)).is_ok());
             assert!(device.get_function(function).is_some());
         }
 
         assert!(device
-            .add_function(PciFunction::new_dummy(MAX_FUNCTION_NUMBER))
+            .add_function(PciFunction::new_dummy_host_bridge(MAX_FUNCTION_NUMBER))
             .is_err());
 
         for function in 0..MAX_FUNCTION_NUMBER {
@@ -156,10 +166,12 @@ mod tests {
 
     #[test]
     fn device_configuration_normal_read() {
+        let mut device = PciDevice::new(0);
         let data = [xor_rng_u32() as u8; 4];
-        let mut device = PciDevice::new_dummy(0);
 
+        device.add_function(get_function(0)).unwrap();
         device.write_configuration_register(0, 1, 0, &data);
+
         assert_eq!(
             device.read_configuration_register(0, 1),
             Some(read_le_u32(&data))
@@ -168,9 +180,10 @@ mod tests {
 
     #[test]
     fn device_configuration_function_read() {
+        let mut device = PciDevice::new(0);
         let data = [xor_rng_u32() as u8; 4];
-        let mut device = PciDevice::new_dummy(0);
 
+        device.add_function(get_function(0)).unwrap();
         device.write_configuration_register(0, 1, 0, &data);
 
         let function = device.get_function(0).unwrap();

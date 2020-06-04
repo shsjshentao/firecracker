@@ -12,9 +12,6 @@ use utils::epoll::EpollEvent;
 pub const PCI_IO_PORT: usize = 0xCF8;
 pub const PCI_IO_PORT_SIZE: usize = 0x8;
 
-/// The bus number for the initial device - root complex.
-const ROOT_COMPLEX_NUMBER: usize = 0;
-
 /// Offset of the CONFIG_ADDRESS port (port 0xCF8),
 const OFFSET_ADDRESS: u64 = 0;
 const OFFSET_ADDRESS_END: u64 = 3;
@@ -39,11 +36,10 @@ pub struct PciRootComplex {
 impl PciRootComplex {
     /// Return a new PCI Root Complex node which does not have any device attached.
     pub fn new() -> Self {
-        let mut bus = PciBus::new(ROOT_COMPLEX_NUMBER);
+        let mut bus = PciBus::new(0);
 
-        // This line is added to have a discoverable device on the bus.
-        // Feel free to remove it if you do not need it.
-        bus.add_device(PciDevice::new_dummy(0)).unwrap();
+        // Add the Host Bridge device on bus 0, device 0, function 0.
+        bus.add_device(PciDevice::new_dummy_host_bridge(0)).unwrap();
 
         PciRootComplex {
             bus: Arc::new(Mutex::new(bus)),
@@ -68,7 +64,7 @@ impl PciRootComplex {
         let (mask, config_address): (u32, u32) = match data.len() {
             1 => (
                 0x0000_00FF << (offset * 8),
-                u32::from(data[0]) << (offset * 8),
+                (data[0] as u32) << (offset * 8),
             ),
             2 => (0x0000_FFFF, (read_le_u16(data) as u32) << (offset * 16)),
             4 => (0xFFFF_FFFF, read_le_u32(data)),
@@ -89,19 +85,11 @@ impl PciRootComplex {
 
         let (bus, device, function, register) = self.parse_configuration_address();
 
-        let x: u32 = self
-            .bus
+        self.bus
             .lock()
             .unwrap()
             .read_configuration_register(bus, device, function, register)
-            .unwrap_or(0xFFFF_FFFF);
-
-        println!(
-            "Read bus {} device {} function {} register {} -> 0x{:x}",
-            bus, device, function, register, x
-        );
-
-        x
+            .unwrap_or(0xFFFF_FFFF)
     }
 
     /// Write to the configure space.
