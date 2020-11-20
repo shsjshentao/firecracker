@@ -23,10 +23,13 @@ use arch::InitrdConfig;
 use devices::legacy::Serial;
 use devices::virtio::{Block, MmioTransport, Net, VirtioDevice, Vsock, VsockUnixBackend};
 use kernel::cmdline::Cmdline as KernelCmdline;
+
+use pci::PciRootComplex;
 use polly::event_manager::{Error as EventManagerError, EventManager, Subscriber};
 use seccomp::{BpfProgramRef, SeccompFilter};
 #[cfg(target_arch = "x86_64")]
 use snapshot::Persist;
+
 use utils::eventfd::EventFd;
 use utils::terminal::Terminal;
 use utils::time::TimestampUs;
@@ -225,6 +228,7 @@ fn create_vmm_and_vcpus(
     );
 
     let vcpus;
+
     // For x86_64 we need to create the interrupt controller before calling `KVM_CREATE_VCPUS`
     // while on aarch64 we need to do it the other way around.
     #[cfg(target_arch = "x86_64")]
@@ -239,12 +243,19 @@ fn create_vmm_and_vcpus(
             Box::new(io::stdout()),
         )
         .map_err(StartMicrovmError::Internal)?;
+
+        // PCI Root Complex device setup.
+        let pci_root_complex =
+            setup_pci_root_complex(event_manager).map_err(StartMicrovmError::Internal)?;
+
+        // Safe to unwrap 'serial_device' as it's always 'Some' on x86_64.
         // x86_64 uses the i8042 reset event as the Vmm exit event.
         let reset_evt = exit_evt
             .try_clone()
             .map_err(Error::EventFd)
             .map_err(Internal)?;
-        create_pio_dev_manager_with_legacy_devices(&vm, serial_device, reset_evt)
+
+        create_pio_dev_manager_with_legacy_devices(&vm, serial_device, pci_root_complex, reset_evt)
             .map_err(Internal)?
     };
 
@@ -561,17 +572,34 @@ pub fn setup_serial_device(
     Ok(serial)
 }
 
+/// Set up the PCI device - that means PCI Root Complex node.
+pub fn setup_pci_root_complex(
+    event_manager: &mut EventManager,
+) -> super::Result<Arc<Mutex<PciRootComplex>>> {
+    let pci_root_complex = Arc::new(Mutex::new(PciRootComplex::new()));
+
+    if let Err(e) = event_manager.add_subscriber(pci_root_complex.clone()) {
+        // This behaviour mimics the one from the setup_serial_device.
+        warn!("Could not add PCI Root Complex event to epoll: {:?}", e);
+    }
+
+    Ok(pci_root_complex)
+}
+
 #[cfg(target_arch = "x86_64")]
 fn create_pio_dev_manager_with_legacy_devices(
     vm: &Vm,
     serial: Arc<Mutex<devices::legacy::Serial>>,
+    pci_root_complex: Arc<Mutex<PciRootComplex>>,
     i8042_reset_evfd: EventFd,
 ) -> std::result::Result<PortIODeviceManager, super::Error> {
-    let mut pio_dev_mgr =
-        PortIODeviceManager::new(serial, i8042_reset_evfd).map_err(Error::CreateLegacyDevice)?;
+    let mut pio_dev_mgr = PortIODeviceManager::new(serial, pci_root_complex, i8042_reset_evfd)
+        .map_err(Error::CreateLegacyDevice)?;
+
     pio_dev_mgr
         .register_devices(vm.fd())
         .map_err(Error::LegacyIOBus)?;
+
     Ok(pio_dev_mgr)
 }
 
@@ -816,6 +844,7 @@ pub mod tests {
             Arc::new(Mutex::new(Serial::new_sink(
                 EventFd::new(libc::EFD_NONBLOCK).unwrap(),
             ))),
+            Arc::new(Mutex::new(PciRootComplex::new())),
             EventFd::new(libc::EFD_NONBLOCK).unwrap(),
         )
         .unwrap()
